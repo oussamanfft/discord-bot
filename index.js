@@ -1,9 +1,8 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionsBitField, ChannelType, Collection, AuditLogEvent, REST, Routes, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActivityType, PermissionsBitField, ChannelType, Collection, AuditLogEvent, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const express = require('express');
 
 const PREFIX = '>>';
 const TOKEN = process.env.DISCORD_TOKEN;
-const CLIENT_ID = '1320571139222929509';
 
 const client = new Client({
     intents: [
@@ -22,6 +21,7 @@ let configs = new Collection();
 let joinLog = new Collection();
 let messageCache = new Collection();
 let verificationCache = new Collection();
+let dashboardMessages = new Collection();
 
 // Configuration par défaut
 const defaultConfig = {
@@ -33,57 +33,51 @@ const defaultConfig = {
     logchannel: null, verification: false, whitelistusers: [], whitelistroles: []
 };
 
-// ========== COMMANDES SLASH ORGANISÉES ==========
-const commands = [
-    { name: 'help', description: '📋 Afficher toutes les commandes' },
-    { name: 'stats', description: '📊 Statistiques du serveur' },
-    { name: 'serverinfo', description: 'ℹ️ Informations du serveur' },
-    { name: 'boss', description: '👑 Crédits du bot' },
-    { name: 'verify', description: '✅ Se vérifier sur le serveur' }
-];
-
-// Enregistrement des commandes slash
-const rest = new REST({ version: '10' }).setToken(TOKEN);
-(async () => {
-    try {
-        console.log('🔄 Enregistrement des commandes slash...');
-        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-        console.log('✅ Commandes slash enregistrées !');
-    } catch (error) { console.error(error); }
-})();
-
 // ========== BOT PRÊT ==========
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} est en ligne !`);
     console.log(`🛡️ ${client.guilds.cache.size} serveurs protégés`);
-    client.user.setActivity(`🛡️ ${PREFIX}help | /help`, { type: ActivityType.Watching });
+    client.user.setActivity(`🛡️ ${PREFIX}help | ${PREFIX}dashboard`, { type: ActivityType.Watching });
 });
 
-// ========== BOUTONS DE CONFIGURATION ==========
-async function sendConfigPanel(message, config) {
+// ========== DASHBOARD DISCORD (PANEL INTERACTIF) ==========
+async function updateDashboard(message, config, guild) {
     const embed = new EmbedBuilder()
         .setColor(0x5865F2)
-        .setTitle('🛡️ **PANEL DE CONFIGURATION**')
+        .setTitle('🛡️ **DASHBOARD DE SÉCURITÉ**')
+        .setThumbnail(guild.iconURL())
         .setDescription(`
 \`\`\`
-┌─────────────────────────────────────────┐
-│  📌 BOT DE SÉCURITÉ ULTIME             │
-├─────────────────────────────────────────┤
-│  🛡️ Anti-Raid      : ${config.antiraid ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}      │
-│  🛡️ Anti-Spam      : ${config.antispam ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}      │
-│  🛡️ Anti-Ban       : ${config.antiban ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}       │
-│  🛡️ Anti-Kick      : ${config.antikick ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}      │
-│  🛡️ Anti-Mentions  : ${config.antimentions ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}  │
-│  🛡️ Anti-Channel   : ${config.antichanneldelete ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}   │
-│  🛡️ Anti-Role      : ${config.antiroledelete ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}    │
-├─────────────────────────────────────────┤
-│  ⚙️ Sanction       : ${config.punishment}                    │
-│  👥 Seuil Raid     : ${config.raidthreshold}                  │
-│  💬 Seuil Spam     : ${config.spamthreshold}                  │
-└─────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════╗
+║                    📊 ÉTAT DES PROTECTIONS               ║
+╠══════════════════════════════════════════════════════════╣
+║  🛡️ Anti-Raid           : ${config.antiraid ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+║  🛡️ Anti-Spam           : ${config.antispam ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+║  🛡️ Anti-Ban            : ${config.antiban ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+║  🛡️ Anti-Kick           : ${config.antikick ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+║  🛡️ Anti-Mentions       : ${config.antimentions ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+║  🛡️ Anti-Channel Delete : ${config.antichanneldelete ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+║  🛡️ Anti-Role Delete    : ${config.antiroledelete ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+║  🛡️ Anti-Server Rename  : ${config.antiserverrename ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+║  🛡️ Anti-Server Icon    : ${config.antiservericon ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}              ║
+╠══════════════════════════════════════════════════════════╣
+║                    ⚙️ CONFIGURATION                      ║
+╠══════════════════════════════════════════════════════════╣
+║  🔨 Sanction par défaut : ${config.punishment.toUpperCase()}${' '.repeat(15 - config.punishment.length)}║
+║  👥 Seuil Anti-Raid     : ${config.raidthreshold} arrivées/10s${' '.repeat(12)}║
+║  💬 Seuil Anti-Spam     : ${config.spamthreshold} messages/5s${' '.repeat(13)}║
+║  🔔 Limite Mentions     : ${config.antimentionslimit} mentions${' '.repeat(18)}║
+╠══════════════════════════════════════════════════════════╣
+║                    📋 INFORMATIONS                       ║
+╠══════════════════════════════════════════════════════════╣
+║  👥 Membres protégés    : ${guild.memberCount}${' '.repeat(18)}║
+║  ✅ Whitelist Users     : ${config.whitelistusers.length}${' '.repeat(22)}║
+║  🎭 Whitelist Roles     : ${config.whitelistroles.length}${' '.repeat(22)}║
+║  📝 Salon des logs      : ${config.logchannel ? `<#${config.logchannel}>` : '❌ NON DÉFINI'}${' '.repeat(8)}║
+╚══════════════════════════════════════════════════════════╝
 \`\`\`
         `)
-        .setFooter({ text: 'Cliquez sur les boutons ci-dessous pour configurer' })
+        .setFooter({ text: `🛡️ Bot de sécurité v10.0 | Serveur: ${guild.name}` })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder()
@@ -97,19 +91,40 @@ async function sendConfigPanel(message, config) {
     const row2 = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder().setCustomId('toggle_antimentions').setLabel('🔔 Anti-Mentions').setStyle(config.antimentions ? ButtonStyle.Success : ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('punishment_kick').setLabel('⚡ Sanction: Kick').setStyle(config.punishment === 'kick' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('punishment_ban').setLabel('⛔ Sanction: Ban').setStyle(config.punishment === 'ban' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('punishment_timeout').setLabel('⏱️ Sanction: Timeout').setStyle(config.punishment === 'timeout' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('toggle_antichannel').setLabel('📁 Anti-Channel').setStyle(config.antichanneldelete ? ButtonStyle.Success : ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('toggle_antirole').setLabel('🎭 Anti-Role').setStyle(config.antiroledelete ? ButtonStyle.Success : ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('toggle_antiserver').setLabel('🏷️ Anti-Rename').setStyle(config.antiserverrename ? ButtonStyle.Success : ButtonStyle.Danger)
         );
 
     const row3 = new ActionRowBuilder()
         .addComponents(
-            new ButtonBuilder().setCustomId('config_logs').setLabel('📋 Configurer Logs').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('config_whitelist').setLabel('✅ Whitelist').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('close_panel').setLabel('🔒 Fermer').setStyle(ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId('punishment_kick').setLabel('⚡ Kick').setStyle(config.punishment === 'kick' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('punishment_ban').setLabel('⛔ Ban').setStyle(config.punishment === 'ban' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('punishment_timeout').setLabel('⏱️ Timeout').setStyle(config.punishment === 'timeout' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('btn_whitelist').setLabel('✅ Whitelist').setStyle(ButtonStyle.Secondary)
         );
 
-    await message.reply({ embeds: [embed], components: [row1, row2, row3] });
+    const row4 = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder().setCustomId('btn_logs').setLabel('📋 Configurer Logs').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('btn_threshold').setLabel('👥 Seuil Anti-Raid').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('btn_verify').setLabel('✅ Vérification').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('refresh_dashboard').setLabel('🔄 Rafraîchir').setStyle(ButtonStyle.Secondary)
+        );
+
+    if (dashboardMessages.has(guild.id)) {
+        const oldMsg = dashboardMessages.get(guild.id);
+        try {
+            const msg = await message.channel.messages.fetch(oldMsg);
+            if (msg) await msg.edit({ embeds: [embed], components: [row1, row2, row3, row4] });
+        } catch(e) {
+            const msg = await message.channel.send({ embeds: [embed], components: [row1, row2, row3, row4] });
+            dashboardMessages.set(guild.id, msg.id);
+        }
+    } else {
+        const msg = await message.channel.send({ embeds: [embed], components: [row1, row2, row3, row4] });
+        dashboardMessages.set(guild.id, msg.id);
+    }
 }
 
 // ========== INTERACTIONS BOUTONS ==========
@@ -125,7 +140,10 @@ client.on('interactionCreate', async (interaction) => {
         'toggle_antispam': 'antispam',
         'toggle_antiban': 'antiban',
         'toggle_antikick': 'antikick',
-        'toggle_antimentions': 'antimentions'
+        'toggle_antimentions': 'antimentions',
+        'toggle_antichannel': 'antichanneldelete',
+        'toggle_antirole': 'antiroledelete',
+        'toggle_antiserver': 'antiserverrename'
     };
 
     if (toggleMap[interaction.customId]) {
@@ -133,8 +151,7 @@ client.on('interactionCreate', async (interaction) => {
         config[key] = !config[key];
         configs.set(interaction.guild.id, config);
         await interaction.reply({ content: `✅ \`${key}\` ${config[key] ? 'activé' : 'désactivé'}`, ephemeral: true });
-        await interaction.message.delete();
-        await sendConfigPanel(interaction.message, config);
+        await updateDashboard(interaction.message, config, interaction.guild);
         return;
     }
 
@@ -142,26 +159,28 @@ client.on('interactionCreate', async (interaction) => {
         config.punishment = 'kick';
         configs.set(interaction.guild.id, config);
         await interaction.reply({ content: '✅ Sanction définie sur **Kick**', ephemeral: true });
-        await interaction.message.delete();
-        await sendConfigPanel(interaction.message, config);
+        await updateDashboard(interaction.message, config, interaction.guild);
     } else if (interaction.customId === 'punishment_ban') {
         config.punishment = 'ban';
         configs.set(interaction.guild.id, config);
         await interaction.reply({ content: '✅ Sanction définie sur **Ban**', ephemeral: true });
-        await interaction.message.delete();
-        await sendConfigPanel(interaction.message, config);
+        await updateDashboard(interaction.message, config, interaction.guild);
     } else if (interaction.customId === 'punishment_timeout') {
         config.punishment = 'timeout';
         configs.set(interaction.guild.id, config);
         await interaction.reply({ content: '✅ Sanction définie sur **Timeout**', ephemeral: true });
-        await interaction.message.delete();
-        await sendConfigPanel(interaction.message, config);
-    } else if (interaction.customId === 'config_logs') {
+        await updateDashboard(interaction.message, config, interaction.guild);
+    } else if (interaction.customId === 'refresh_dashboard') {
+        await interaction.reply({ content: '🔄 Dashboard rafraîchi', ephemeral: true });
+        await updateDashboard(interaction.message, config, interaction.guild);
+    } else if (interaction.customId === 'btn_logs') {
         await interaction.reply({ content: '📋 Mentionnez un salon pour les logs : `>>logchannel #salon`', ephemeral: true });
-    } else if (interaction.customId === 'config_whitelist') {
-        await interaction.reply({ content: '✅ Ajoutez un utilisateur : `>>whitelist user @user`\n🎭 Ajoutez un rôle : `>>whitelist role @role`', ephemeral: true });
-    } else if (interaction.customId === 'close_panel') {
-        await interaction.message.delete();
+    } else if (interaction.customId === 'btn_whitelist') {
+        await interaction.reply({ content: '✅ **Gestion Whitelist**\n\nAjouter un utilisateur : `>>whitelist user @user`\nAjouter un rôle : `>>whitelist role @role`\n\nPour voir la liste, utilisez `>>whitelist list`', ephemeral: true });
+    } else if (interaction.customId === 'btn_threshold') {
+        await interaction.reply({ content: '👥 **Changer le seuil Anti-Raid**\n\nUtilisez : `>>set threshold [nombre]`\nExemple : `>>set threshold 5` (5 arrivées en 10 secondes)', ephemeral: true });
+    } else if (interaction.customId === 'btn_verify') {
+        await interaction.reply({ content: '✅ **Vérification**\n\nActiver : `>>setupverify`\nSe vérifier : `>>verify`', ephemeral: true });
     }
 });
 
@@ -232,7 +251,9 @@ client.on('guildBanAdd', async (ban) => {
     if (!config.antiban) return;
     const logs = await ban.guild.fetchAuditLogs({ type: AuditLogEvent.MemberBanAdd, limit: 1 });
     const log = logs.entries.first();
-    if (log && log.executor.id !== client.user.id) await punish(ban.guild.id, log.executor.id, 'Ban massif');
+    if (log && log.executor.id !== client.user.id && Date.now() - log.createdTimestamp < 3000) {
+        await punish(ban.guild.id, log.executor.id, 'Ban massif');
+    }
 });
 
 client.on('guildMemberRemove', async (member) => {
@@ -274,6 +295,15 @@ client.on('messageCreate', async (message) => {
     if (!configs.has(message.guild.id)) configs.set(message.guild.id, { ...defaultConfig });
     const config = configs.get(message.guild.id);
 
+    // ---------- DASHBOARD (PANEL PRINCIPAL) ----------
+    if (command === 'dashboard' || command === 'panel') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return message.reply('❌ Tu dois être **administrateur** pour accéder au dashboard.');
+        }
+        await updateDashboard(message, config, message.guild);
+        return;
+    }
+
     // ---------- HELP ----------
     if (command === 'help') {
         const embed = new EmbedBuilder()
@@ -281,39 +311,30 @@ client.on('messageCreate', async (message) => {
             .setTitle('🛡️ **CENTRE DE COMMANDES**')
             .setDescription(`
 \`\`\`
-┌─────────────────────────────────────────────┐
-│  📌 BOT DE SÉCURITÉ - VERSION 10.0         │
-├─────────────────────────────────────────────┤
-│  🎮 COMMANDES PRÉFIXE                       │
-│  ├─ ${PREFIX}config      → Ouvrir le panel de config │
-│  ├─ ${PREFIX}stats        → Voir les statistiques      │
-│  ├─ ${PREFIX}serverinfo   → Infos du serveur           │
-│  ├─ ${PREFIX}boss         → Crédits du bot             │
-│  ├─ ${PREFIX}verify       → Se vérifier                │
-│  ├─ ${PREFIX}whitelist    → Gérer la whitelist         │
-│  └─ ${PREFIX}logchannel   → Définir salon des logs     │
-├─────────────────────────────────────────────┤
-│  🤖 COMMANDES SLASH                          │
-│  ├─ /help             → Aide                 │
-│  ├─ /stats            → Statistiques         │
-│  ├─ /serverinfo       → Infos serveur        │
-│  ├─ /boss             → Crédits              │
-│  └─ /verify           → Vérification         │
-└─────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════╗
+║                    📋 COMMANDES DISPONIBLES              ║
+╠══════════════════════════════════════════════════════════╣
+║  🎮 DASHBOARD                                            ║
+║  ├─ ${PREFIX}dashboard  → Ouvrir le panneau de contrôle     ║
+║  ├─ ${PREFIX}stats       → Voir les statistiques            ║
+║  └─ ${PREFIX}serverinfo  → Infos du serveur                ║
+╠══════════════════════════════════════════════════════════╣
+║  ⚙️ CONFIGURATION                                        ║
+║  ├─ ${PREFIX}set threshold [n] → Changer seuil anti-raid     ║
+║  ├─ ${PREFIX}logchannel #salon → Définir salon des logs      ║
+║  ├─ ${PREFIX}whitelist user/@user → Gérer whitelist          ║
+║  └─ ${PREFIX}setupverify → Activer la vérification          ║
+╠══════════════════════════════════════════════════════════╣
+║  👑 AUTRES                                               ║
+║  ├─ ${PREFIX}boss        → Crédits du bot                   ║
+║  ├─ ${PREFIX}verify      → Se vérifier                      ║
+║  └─ ${PREFIX}help        → Afficher cette aide              ║
+╚══════════════════════════════════════════════════════════╝
 \`\`\`
             `)
             .setFooter({ text: '🛡️ Protection Anti-Nuke 24/7 | Créé par vctr_on' })
             .setTimestamp();
         return message.channel.send({ embeds: [embed] });
-    }
-
-    // ---------- CONFIG (PANEL BOUTONS) ----------
-    if (command === 'config') {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return message.reply('❌ Tu dois être **administrateur** pour utiliser cette commande.');
-        }
-        await sendConfigPanel(message, config);
-        return;
     }
 
     // ---------- STATS ----------
@@ -323,17 +344,17 @@ client.on('messageCreate', async (message) => {
             .setTitle('📊 **STATISTIQUES DU SERVEUR**')
             .setDescription(`
 \`\`\`
-┌─────────────────────────────────────────────┐
-│  📈 PROTECTIONS ACTIVES                     │
-├─────────────────────────────────────────────┤
-│  🛡️ Membres protégés   : ${message.guild.memberCount}              │
-│  ✅ Whitelist users    : ${config.whitelistusers.length}              │
-│  🎭 Whitelist roles    : ${config.whitelistroles.length}              │
-│  ⚙️ Sanction actuelle  : ${config.punishment}                    │
-│  👥 Seuil anti-raid    : ${config.raidthreshold} arrivées/10s       │
-│  💬 Seuil anti-spam    : ${config.spamthreshold} messages/5s        │
-│  🔔 Seuil mentions     : ${config.antimentionslimit} mentions       │
-└─────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════╗
+║                    📈 STATISTIQUES                       ║
+╠══════════════════════════════════════════════════════════╣
+║  👥 Membres protégés    : ${message.guild.memberCount}                      ║
+║  ✅ Whitelist users     : ${config.whitelistusers.length}                      ║
+║  🎭 Whitelist roles     : ${config.whitelistroles.length}                      ║
+║  🔨 Sanction actuelle   : ${config.punishment.toUpperCase()}                      ║
+║  👥 Seuil anti-raid     : ${config.raidthreshold} arrivées/10s               ║
+║  💬 Seuil anti-spam     : ${config.spamthreshold} messages/5s                ║
+║  🔔 Limite mentions     : ${config.antimentionslimit} mentions                ║
+╚══════════════════════════════════════════════════════════╝
 \`\`\`
             `)
             .setFooter({ text: '🛡️ Protection active 24/7' })
@@ -349,17 +370,17 @@ client.on('messageCreate', async (message) => {
             .setThumbnail(message.guild.iconURL())
             .setDescription(`
 \`\`\`
-┌─────────────────────────────────────────────┐
-│  ℹ️ INFORMATIONS DU SERVEUR                │
-├─────────────────────────────────────────────┤
-│  👑 Propriétaire   : <@${message.guild.ownerId}>  │
-│  👥 Membres        : ${message.guild.memberCount}              │
-│  🛡️ Protection     : ✅ Activée              │
-│  📅 Création       : <t:${Math.floor(message.guild.createdTimestamp / 1000)}:R> │
-└─────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════╗
+║                    ℹ️ INFORMATIONS                       ║
+╠══════════════════════════════════════════════════════════╣
+║  👑 Propriétaire   : <@${message.guild.ownerId}>                         ║
+║  👥 Membres        : ${message.guild.memberCount}                         ║
+║  🛡️ Protection     : ✅ Activée                         ║
+║  📅 Création       : <t:${Math.floor(message.guild.createdTimestamp / 1000)}:R>              ║
+╚══════════════════════════════════════════════════════════╝
 \`\`\`
             `)
-            .setFooter({ text: '🛡️ Bot de sécurité' })
+            .setFooter({ text: '🛡️ Bot de sécurité | vctr_on' })
             .setTimestamp();
         return message.channel.send({ embeds: [embed] });
     }
@@ -371,19 +392,40 @@ client.on('messageCreate', async (message) => {
             .setTitle('👑 **MADE BY VCTR_ON** 👑')
             .setDescription(`
 \`\`\`
-╔═════════════════════════════════════════════╗
-║                                             ║
-║        🛡️ BOT DE SÉCURITÉ ULTIME          ║
-║                                             ║
-║        ✨ Créé par vctr_on                  ║
-║        🚀 Version 10.0 - Ultimate          ║
-║        🛡️ Anti-Nuke & Anti-Raid           ║
-║        💜 Protection 24/7                  ║
-║                                             ║
-╚═════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════╗
+║                                                          ║
+║              🛡️ BOT DE SÉCURITÉ ULTIME                 ║
+║                                                          ║
+║              ✨ Créé par vctr_on                        ║
+║              🚀 Version 10.0 - Ultimate                 ║
+║              🛡️ Anti-Nuke & Anti-Raid                  ║
+║              💜 Protection 24/7                         ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
 \`\`\`
             `)
             .setFooter({ text: '🛡️ Protection maximale activée' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // ---------- SET THRESHOLD ----------
+    if (command === 'set' && args[0] === 'threshold' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        const value = parseInt(args[1]);
+        if (isNaN(value) || value < 2 || value > 20) return message.reply('❌ Seuil entre **2** et **20** arrivées');
+        config.raidthreshold = value;
+        configs.set(message.guild.id, config);
+        message.reply(`✅ Seuil anti-raid défini sur **${value}** arrivées en 10 secondes`);
+    }
+
+    // ---------- SETUPVERIFY ----------
+    if (command === 'setupverify' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        config.verification = true;
+        configs.set(message.guild.id, config);
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ **VÉRIFICATION ACTIVÉE**')
+            .setDescription(`Les nouveaux membres devront taper \`${PREFIX}verify\` pour accéder au serveur`)
             .setTimestamp();
         return message.channel.send({ embeds: [embed] });
     }
@@ -402,18 +444,6 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed] });
     }
 
-    // ---------- SETUPVERIFY ----------
-    if (command === 'setupverify' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        config.verification = true;
-        configs.set(message.guild.id, config);
-        const embed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('✅ **VÉRIFICATION ACTIVÉE**')
-            .setDescription(`Les nouveaux membres devront taper \`${PREFIX}verify\` ou \`/verify\` pour accéder au serveur`)
-            .setTimestamp();
-        return message.channel.send({ embeds: [embed] });
-    }
-
     // ---------- LOGCHANNEL ----------
     if (command === 'logchannel' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         const channel = message.mentions.channels.first();
@@ -430,8 +460,24 @@ client.on('messageCreate', async (message) => {
     // ---------- WHITELIST ----------
     if (command === 'whitelist' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         const type = args[0];
+        
+        if (type === 'list') {
+            const users = config.whitelistusers.map(id => `<@${id}>`).join(', ') || 'Aucun';
+            const roles = config.whitelistroles.map(id => `<@&${id}>`).join(', ') || 'Aucun';
+            const embed = new EmbedBuilder()
+                .setColor(0x00FF00)
+                .setTitle('✅ **LISTE WHITELIST**')
+                .addFields(
+                    { name: '👤 Utilisateurs', value: users, inline: false },
+                    { name: '🎭 Rôles', value: roles, inline: false }
+                )
+                .setTimestamp();
+            return message.channel.send({ embeds: [embed] });
+        }
+        
         const target = message.mentions.users.first() || message.mentions.roles.first();
         if (!target) return message.reply('❌ Mentionne un utilisateur ou un rôle');
+        
         if (type === 'user') {
             if (config.whitelistusers.includes(target.id)) {
                 config.whitelistusers = config.whitelistusers.filter(id => id !== target.id);
@@ -449,152 +495,17 @@ client.on('messageCreate', async (message) => {
                 message.reply(`✅ ${target.name} ajouté à la whitelist`);
             }
         } else {
-            message.reply(`❌ Usage: \`${PREFIX}whitelist user/@user\` ou \`${PREFIX}whitelist role/@role\``);
+            message.reply(`❌ Usage: \`${PREFIX}whitelist user/@user\` ou \`${PREFIX}whitelist role/@role\`\n\`${PREFIX}whitelist list\` pour voir la liste`);
         }
         configs.set(message.guild.id, config);
     }
 });
 
-// ========== COMMANDES SLASH ==========
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-    if (!interaction.guild) return;
-
-    if (!configs.has(interaction.guild.id)) configs.set(interaction.guild.id, { ...defaultConfig });
-    const config = configs.get(interaction.guild.id);
-
-    if (interaction.commandName === 'help') {
-        const embed = new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle('🛡️ **COMMANDES SLASH**')
-            .setDescription(`
-\`\`\`
-┌─────────────────────────────────────────────┐
-│  🤖 COMMANDES DISPONIBLES                   │
-├─────────────────────────────────────────────┤
-│  /help        → Afficher cette aide        │
-│  /stats       → Voir les statistiques       │
-│  /serverinfo  → Infos du serveur           │
-│  /boss        → Crédits du bot             │
-│  /verify      → Se vérifier                │
-└─────────────────────────────────────────────┘
-\`\`\`
-📌 **Préfixe aussi disponible :** \`${PREFIX}help\`
-            `)
-            .setFooter({ text: '🛡️ Bot de sécurité | vctr_on' })
-            .setTimestamp();
-        return interaction.reply({ embeds: [embed], ephemeral: false });
-    }
-
-    if (interaction.commandName === 'stats') {
-        const embed = new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle('📊 **STATISTIQUES**')
-            .setDescription(`
-\`\`\`
-┌─────────────────────────────────────────────┐
-│  📈 INFORMATIONS                           │
-├─────────────────────────────────────────────┤
-│  👥 Membres        : ${interaction.guild.memberCount}              │
-│  ⚙️ Sanction       : ${config.punishment}                    │
-│  ✅ Whitelist      : ${config.whitelistusers.length} utilisateurs     │
-│  🎭 Whitelist      : ${config.whitelistroles.length} rôles            │
-└─────────────────────────────────────────────┘
-\`\`\`
-            `)
-            .setTimestamp();
-        return interaction.reply({ embeds: [embed], ephemeral: false });
-    }
-
-    if (interaction.commandName === 'serverinfo') {
-        const embed = new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle(`📡 ${interaction.guild.name}`)
-            .setThumbnail(interaction.guild.iconURL())
-            .setDescription(`
-\`\`\`
-┌─────────────────────────────────────────────┐
-│  ℹ️ INFOS SERVEUR                          │
-├─────────────────────────────────────────────┤
-│  👑 Propriétaire : <@${interaction.guild.ownerId}>  │
-│  👥 Membres       : ${interaction.guild.memberCount}              │
-│  🛡️ Protection    : ✅ Activée              │
-└─────────────────────────────────────────────┘
-\`\`\`
-            `)
-            .setTimestamp();
-        return interaction.reply({ embeds: [embed], ephemeral: false });
-    }
-
-    if (interaction.commandName === 'boss') {
-        const embed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('👑 **MADE BY VCTR_ON**')
-            .setDescription('Bot de sécurité ultime - Anti-Nuke & Anti-Raid 24/7')
-            .setFooter({ text: '🛡️ Version 10.0' })
-            .setTimestamp();
-        return interaction.reply({ embeds: [embed], ephemeral: false });
-    }
-
-    if (interaction.commandName === 'verify') {
-        if (!config.verification) return interaction.reply({ content: '❌ Vérification non activée', ephemeral: true });
-        if (verificationCache.has(interaction.user.id)) return interaction.reply({ content: '❌ Déjà vérifié', ephemeral: true });
-        verificationCache.set(interaction.user.id, true);
-        const embed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('✅ VÉRIFICATION RÉUSSIE')
-            .setDescription('Bienvenue sur le serveur !');
-        return interaction.reply({ embeds: [embed], ephemeral: false });
-    }
-});
-
-// ========== DASHBOARD WEB ==========
+// ========== SERVEUR WEB KEEP-ALIVE ==========
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.get('/api/stats', (req, res) => {
-    res.json({
-        servers: client.guilds.cache.size,
-        users: client.users.cache.filter(u => !u.bot).size,
-        ram: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
-        prefix: PREFIX
-    });
-});
-
-app.get('/', (req, res) => {
-    res.send(`
-<!DOCTYPE html>
-<html>
-<head><title>Security Bot</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:linear-gradient(135deg,#0a0a2a,#1a1a3e);font-family:'Segoe UI',sans-serif;min-height:100vh;color:#fff}
-.container{max-width:1000px;margin:0 auto;padding:20px}
-.header{text-align:center;padding:40px;background:rgba(255,255,255,0.05);border-radius:30px;margin-bottom:30px}
-.header h1{font-size:3em;background:linear-gradient(135deg,#ff6b6b,#4ecdc4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:40px}
-.card{background:rgba(255,255,255,0.08);border-radius:20px;padding:25px;text-align:center}
-.value{font-size:2.5em;font-weight:bold;color:#4ecdc4}
-.footer{text-align:center;padding:30px;background:rgba(0,0,0,0.3);border-radius:20px}
-</style>
-</head>
-<body>
-<div class=container>
-<div class=header><h1>🛡️ SECURITY BOT</h1><p>Protection Anti-Nuke & Anti-Raid 24/7</p></div>
-<div class=stats><div class=card><div class=value id=servers>0</div><div>Serveurs</div></div>
-<div class=card><div class=value id=users>0</div><div>Membres</div></div>
-<div class=card><div class=value id=ram>0</div><div>RAM MB</div></div></div>
-<div class=footer><p>🛡️ Bot créé par vctr_on - Version 10.0</p></div>
-</div>
-<script>
-fetch('/api/stats').then(r=>r.json()).then(d=>{document.getElementById('servers').innerText=d.servers;document.getElementById('users').innerText=d.users;document.getElementById('ram').innerText=d.ram});
-setInterval(()=>fetch('/api/stats').then(r=>r.json()).then(d=>{document.getElementById('servers').innerText=d.servers;document.getElementById('users').innerText=d.users;document.getElementById('ram').innerText=d.ram}),30000);
-</script>
-</body>
-</html>
-    `);
-});
-
-app.listen(port, () => console.log(`✅ Dashboard sur le port ${port}`));
+app.get('/', (req, res) => res.send('🛡️ Bot de sécurité en ligne !'));
+app.listen(port, () => console.log(`✅ Keep-alive sur port ${port}`));
 
 client.login(TOKEN);
