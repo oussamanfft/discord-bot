@@ -12,7 +12,6 @@ const client = new Client({
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildModeration,
         GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildPresences,
     ]
 });
 
@@ -26,53 +25,70 @@ let dashboardMessages = new Collection();
 // Configuration par défaut
 const defaultConfig = {
     antiraid: true, antispam: true, antiban: true, antikick: true,
-    antichanneldelete: true, antiroledelete: true, antichannelcreate: true,
-    antirolecreate: true, antimentions: true, antiserverrename: true,
-    antiservericon: true, antighostping: true, antimentionslimit: 5,
-    raidthreshold: 5, spamthreshold: 5, punishment: 'kick',
-    logchannel: null, verification: false, whitelistusers: [], whitelistroles: []
+    antichanneldelete: true, antiroledelete: true,
+    antimentions: true, antiserverrename: true, antiservericon: true,
+    antimentionslimit: 5, raidthreshold: 5, spamthreshold: 5,
+    punishment: 'kick', logchannel: null, verification: false,
+    whitelistusers: [], whitelistroles: []
 };
 
 // ========== BOT PRÊT ==========
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} est en ligne !`);
     console.log(`🛡️ ${client.guilds.cache.size} serveurs protégés`);
-    client.user.setActivity(`🛡️ ${PREFIX}help | ${PREFIX}dashboard`, { type: ActivityType.Watching });
+    client.user.setActivity(`🛡️ ${PREFIX}help`, { type: ActivityType.Watching });
 });
 
-// ========== DASHBOARD DISCORD ==========
+// ========== FONCTION POUR EMBEDS RESPONSIVE ==========
+function createResponsiveEmbed(title, content, color = 0x1a1a2e, thumbnail = null) {
+    const embed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle(title)
+        .setDescription(content)
+        .setFooter({ text: '🛡️ Vctr_on Security • 24/7' })
+        .setTimestamp();
+    
+    if (thumbnail) embed.setThumbnail(thumbnail);
+    return embed;
+}
+
+// ========== DASHBOARD ==========
 async function updateDashboard(message, config, guild) {
+    const statusIcon = (value) => value ? '✅' : '❌';
+    
+    const content = `\`\`\`ansi
+[1;36m╔════════════════════════════════════════════╗[0m
+[1;36m║         [1;33m🛡️ DASHBOARD DE SÉCURITÉ [1;36m           ║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32mPROTECTIONS ACTIVES[0m                         [1;36m║[0m
+[1;36m║ [0m   Anti-Raid     : ${statusIcon(config.antiraid)} [1;36m║[0m
+[1;36m║ [0m   Anti-Spam     : ${statusIcon(config.antispam)} [1;36m║[0m
+[1;36m║ [0m   Anti-Ban      : ${statusIcon(config.antiban)} [1;36m║[0m
+[1;36m║ [0m   Anti-Kick     : ${statusIcon(config.antikick)} [1;36m║[0m
+[1;36m║ [0m   Anti-Mentions : ${statusIcon(config.antimentions)} [1;36m║[0m
+[1;36m║ [0m   Anti-Channels : ${statusIcon(config.antichanneldelete)} [1;36m║[0m
+[1;36m║ [0m   Anti-Roles    : ${statusIcon(config.antiroledelete)} [1;36m║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32mCONFIGURATION[0m                                 [1;36m║[0m
+[1;36m║ [0m   Sanction   : [1;33m${config.punishment.toUpperCase()}[0m                [1;36m║[0m
+[1;36m║ [0m   Seuil Raid : [1;33m${config.raidthreshold}[0m membres/10s         [1;36m║[0m
+[1;36m║ [0m   Seuil Spam : [1;33m${config.spamthreshold}[0m messages/5s         [1;36m║[0m
+[1;36m║ [0m   Mentions   : [1;33m${config.antimentionslimit}[0m max              [1;36m║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32mINFORMATIONS[0m                                 [1;36m║[0m
+[1;36m║ [0m   👥 Membres     : [1;33m${guild.memberCount}[0m                     [1;36m║[0m
+[1;36m║ [0m   ✅ Whitelist   : [1;33m${config.whitelistusers.length}[0m users           [1;36m║[0m
+[1;36m║ [0m   🎭 Whitelist   : [1;33m${config.whitelistroles.length}[0m roles           [1;36m║[0m
+[1;36m╚════════════════════════════════════════════╝[0m
+\`\`\`
+> **📌 Préfixe :** ` + PREFIX + ` | **🛡️ Bot v10.0**
+> 💡 Utilisez les boutons ci-dessous pour configurer`;
+
     const embed = new EmbedBuilder()
         .setColor(0x1a1a2e)
-        .setAuthor({ name: '🛡️ SECURITY DASHBOARD', iconURL: guild.iconURL() })
-        .setTitle('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬')
-        .setDescription(`
-\`\`\`diff
-+ PROTECTIONS ACTIVES
-${config.antiraid ? '✅  Anti-Raid              : ACTIVÉ' : '❌  Anti-Raid              : DÉSACTIVÉ'}
-${config.antispam ? '✅  Anti-Spam              : ACTIVÉ' : '❌  Anti-Spam              : DÉSACTIVÉ'}
-${config.antiban ? '✅  Anti-Ban               : ACTIVÉ' : '❌  Anti-Ban               : DÉSACTIVÉ'}
-${config.antikick ? '✅  Anti-Kick              : ACTIVÉ' : '❌  Anti-Kick              : DÉSACTIVÉ'}
-${config.antimentions ? '✅  Anti-Mentions          : ACTIVÉ' : '❌  Anti-Mentions          : DÉSACTIVÉ'}
-${config.antichanneldelete ? '✅  Anti-Channel Delete    : ACTIVÉ' : '❌  Anti-Channel Delete    : DÉSACTIVÉ'}
-${config.antiroledelete ? '✅  Anti-Role Delete       : ACTIVÉ' : '❌  Anti-Role Delete       : DÉSACTIVÉ'}
-${config.antiserverrename ? '✅  Anti-Server Rename     : ACTIVÉ' : '❌  Anti-Server Rename     : DÉSACTIVÉ'}
-${config.antiservericon ? '✅  Anti-Server Icon       : ACTIVÉ' : '❌  Anti-Server Icon       : DÉSACTIVÉ'}
-
-+ CONFIGURATION
-🔨  Sanction par défaut    : ${config.punishment.toUpperCase()}
-👥  Seuil Anti-Raid        : ${config.raidthreshold} membres / 10s
-💬  Seuil Anti-Spam        : ${config.spamthreshold} messages / 5s
-🔔  Limite mentions        : ${config.antimentionslimit} mentions
-
-+ INFORMATIONS
-👥  Membres protégés       : ${guild.memberCount}
-✅  Whitelist utilisateurs  : ${config.whitelistusers.length}
-🎭  Whitelist rôles         : ${config.whitelistroles.length}
-📝  Salon des logs          : ${config.logchannel ? `<#${config.logchannel}>` : '❌ Non défini'}
-\`\`\`
-        `)
-        .setFooter({ text: 'Cliquez sur les boutons ci-dessous pour modifier la configuration' })
+        .setTitle('• SECURITY DASHBOARD •')
+        .setDescription(content)
+        .setFooter({ text: `Serveur : ${guild.name} | Cliquez sur les boutons` })
         .setTimestamp();
 
     const row1 = new ActionRowBuilder()
@@ -85,39 +101,30 @@ ${config.antiservericon ? '✅  Anti-Server Icon       : ACTIVÉ' : '❌  Anti-S
 
     const row2 = new ActionRowBuilder()
         .addComponents(
-            new ButtonBuilder().setCustomId('toggle_antimentions').setLabel('Anti-Mentions').setStyle(config.antimentions ? ButtonStyle.Success : ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('toggle_antichannel').setLabel('Anti-Channel').setStyle(config.antichanneldelete ? ButtonStyle.Success : ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('toggle_antirole').setLabel('Anti-Role').setStyle(config.antiroledelete ? ButtonStyle.Success : ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('toggle_antiserver').setLabel('Anti-Rename').setStyle(config.antiserverrename ? ButtonStyle.Success : ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId('punishment_kick').setLabel('⚡ Kick').setStyle(config.punishment === 'kick' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('punishment_ban').setLabel('⛔ Ban').setStyle(config.punishment === 'ban' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('punishment_timeout').setLabel('⏱️ Timeout').setStyle(config.punishment === 'timeout' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('refresh_dashboard').setLabel('🔄 Refresh').setStyle(ButtonStyle.Secondary)
         );
 
     const row3 = new ActionRowBuilder()
         .addComponents(
-            new ButtonBuilder().setCustomId('punishment_kick').setLabel('⚡ Kick').setStyle(config.punishment === 'kick' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('punishment_ban').setLabel('⛔ Ban').setStyle(config.punishment === 'ban' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('punishment_timeout').setLabel('⏱️ Timeout').setStyle(config.punishment === 'timeout' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('btn_whitelist').setLabel('📋 Whitelist').setStyle(ButtonStyle.Secondary)
-        );
-
-    const row4 = new ActionRowBuilder()
-        .addComponents(
             new ButtonBuilder().setCustomId('btn_logs').setLabel('📁 Logs').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('btn_threshold').setLabel('⚙️ Seuil').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('btn_verify').setLabel('✅ Verify').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('refresh_dashboard').setLabel('🔄 Refresh').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('btn_whitelist').setLabel('✅ Whitelist').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('btn_verify').setLabel('🔐 Verify').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('btn_help').setLabel('❓ Help').setStyle(ButtonStyle.Secondary)
         );
 
     if (dashboardMessages.has(guild.id)) {
-        const oldMsg = dashboardMessages.get(guild.id);
         try {
-            const msg = await message.channel.messages.fetch(oldMsg);
-            if (msg) await msg.edit({ embeds: [embed], components: [row1, row2, row3, row4] });
+            const oldMsg = await message.channel.messages.fetch(dashboardMessages.get(guild.id));
+            if (oldMsg) await oldMsg.edit({ embeds: [embed], components: [row1, row2, row3] });
         } catch(e) {
-            const msg = await message.channel.send({ embeds: [embed], components: [row1, row2, row3, row4] });
+            const msg = await message.channel.send({ embeds: [embed], components: [row1, row2, row3] });
             dashboardMessages.set(guild.id, msg.id);
         }
     } else {
-        const msg = await message.channel.send({ embeds: [embed], components: [row1, row2, row3, row4] });
+        const msg = await message.channel.send({ embeds: [embed], components: [row1, row2, row3] });
         dashboardMessages.set(guild.id, msg.id);
     }
 }
@@ -134,11 +141,7 @@ client.on('interactionCreate', async (interaction) => {
         'toggle_antiraid': 'antiraid',
         'toggle_antispam': 'antispam',
         'toggle_antiban': 'antiban',
-        'toggle_antikick': 'antikick',
-        'toggle_antimentions': 'antimentions',
-        'toggle_antichannel': 'antichanneldelete',
-        'toggle_antirole': 'antiroledelete',
-        'toggle_antiserver': 'antiserverrename'
+        'toggle_antikick': 'antikick'
     };
 
     if (toggleMap[interaction.customId]) {
@@ -171,11 +174,11 @@ client.on('interactionCreate', async (interaction) => {
     } else if (interaction.customId === 'btn_logs') {
         await interaction.reply({ content: '📁 **Configuration des logs**\n\nUtilisez : `>>logchannel #salon`', ephemeral: true });
     } else if (interaction.customId === 'btn_whitelist') {
-        await interaction.reply({ content: '📋 **Gestion Whitelist**\n\n`>>whitelist user @user` - Ajouter un utilisateur\n`>>whitelist role @role` - Ajouter un rôle\n`>>whitelist list` - Voir la liste', ephemeral: true });
-    } else if (interaction.customId === 'btn_threshold') {
-        await interaction.reply({ content: '⚙️ **Changer le seuil Anti-Raid**\n\nUtilisez : `>>set threshold [nombre]`\nExemple : `>>set threshold 5`', ephemeral: true });
+        await interaction.reply({ content: '✅ **Gestion Whitelist**\n\n`>>whitelist user @user` - Ajouter\n`>>whitelist role @role` - Ajouter rôle\n`>>whitelist list` - Voir la liste', ephemeral: true });
     } else if (interaction.customId === 'btn_verify') {
-        await interaction.reply({ content: '✅ **Vérification**\n\n`>>setupverify` - Activer la vérification\n`>>verify` - Se vérifier', ephemeral: true });
+        await interaction.reply({ content: '🔐 **Vérification**\n\n`>>setupverify` - Activer\n`>>verify` - Se vérifier', ephemeral: true });
+    } else if (interaction.customId === 'btn_help') {
+        await interaction.reply({ content: '📌 **Commandes disponibles**\n\n`>>dashboard` - Panneau principal\n`>>help` - Aide complète\n`>>stats` - Statistiques\n`>>serverinfo` - Infos serveur\n`>>boss` - Crédits', ephemeral: true });
     }
 });
 
@@ -195,7 +198,7 @@ async function punish(guildId, userId, reason) {
     } catch(e) { return null; }
 }
 
-// ========== ÉVÈNEMENTS DE SÉCURITÉ ==========
+// ========== ÉVÈNEMENTS SÉCURITÉ ==========
 client.on('guildMemberAdd', async (member) => {
     const config = configs.get(member.guild.id) || defaultConfig;
     if (!config.antiraid) return;
@@ -220,6 +223,7 @@ client.on('guildMemberAdd', async (member) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
     const config = configs.get(message.guild.id) || defaultConfig;
+    
     if (config.antispam) {
         if (!messageCache.has(message.author.id)) messageCache.set(message.author.id, []);
         const msgs = messageCache.get(message.author.id);
@@ -232,6 +236,7 @@ client.on('messageCreate', async (message) => {
             messageCache.delete(message.author.id);
         }
     }
+    
     if (config.antimentions) {
         const mentions = message.mentions.users.size + message.mentions.roles.size;
         if (mentions > config.antimentionslimit) {
@@ -301,121 +306,101 @@ client.on('messageCreate', async (message) => {
 
     // ---------- HELP ----------
     if (command === 'help') {
+        const content = `\`\`\`ansi
+[1;36m╔════════════════════════════════════════════╗[0m
+[1;36m║         [1;33m📋 CENTRE DE COMMANDES [1;36m             ║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32m🚀 DASHBOARD[0m                                [1;36m║[0m
+[1;36m║ [0m   [1;36m>>dashboard[0m  - Panneau de contrôle     [1;36m║[0m
+[1;36m║ [0m   [1;36m>>stats[0m      - Statistiques           [1;36m║[0m
+[1;36m║ [0m   [1;36m>>serverinfo[0m - Infos du serveur       [1;36m║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32m⚙️ CONFIGURATION[0m                           [1;36m║[0m
+[1;36m║ [0m   [1;36m>>set threshold [n][0m - Seuil anti-raid [1;36m║[0m
+[1;36m║ [0m   [1;36m>>logchannel #salon[0m - Salon des logs [1;36m║[0m
+[1;36m║ [0m   [1;36m>>whitelist[0m      - Gérer whitelist   [1;36m║[0m
+[1;36m║ [0m   [1;36m>>setupverify[0m   - Vérification       [1;36m║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32m👑 AUTRES[0m                                  [1;36m║[0m
+[1;36m║ [0m   [1;36m>>boss[0m       - Crédits du bot        [1;36m║[0m
+[1;36m║ [0m   [1;36m>>verify[0m     - Se vérifier          [1;36m║[0m
+[1;36m║ [0m   [1;36m>>help[0m       - Cette aide          [1;36m║[0m
+[1;36m╚════════════════════════════════════════════╝[0m
+\`\`\`
+> **📌 Préfixe :** ` + PREFIX + ` | **🛡️ Protection 24/7**
+> 💡 Utilisez \`>>dashboard\` pour le panneau interactif`;
+
         const embed = new EmbedBuilder()
             .setColor(0x1a1a2e)
-            .setAuthor({ name: '🛡️ CENTRE DE COMMANDES', iconURL: client.user.displayAvatarURL() })
-            .setTitle('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬')
-            .setDescription(`
-\`\`\`yaml
-📌 COMMANDES DISPONIBLES
-
-🎮 DASHBOARD
-  >>dashboard     Ouvrir le panneau de contrôle
-  >>stats         Voir les statistiques
-  >>serverinfo    Informations du serveur
-
-⚙️ CONFIGURATION
-  >>set threshold [n]   Changer le seuil anti-raid
-  >>logchannel #salon    Définir le salon des logs
-  >>whitelist user/@user Gérer la whitelist
-  >>whitelist list       Voir la liste whitelist
-  >>setupverify          Activer la vérification
-
-👑 AUTRES
-  >>boss          Crédits du bot
-  >>verify        Se vérifier
-  >>help          Afficher cette aide
-\`\`\`
-            `)
-            .setFooter({ text: '🛡️ Protection Anti-Nuke 24/7 | vctr_on' })
-            .setColor(0x1a1a2e)
+            .setTitle('• SECURITY BOT •')
+            .setDescription(content)
+            .setFooter({ text: '🛡️ Créé par vctr_on • Version 10.0' })
             .setTimestamp();
+        
         return message.channel.send({ embeds: [embed] });
     }
 
     // ---------- STATS ----------
     if (command === 'stats') {
-        const embed = new EmbedBuilder()
-            .setColor(0x1a1a2e)
-            .setAuthor({ name: '📊 STATISTIQUES DU SERVEUR', iconURL: message.guild.iconURL() })
-            .setTitle('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬')
-            .setDescription(`
-\`\`\`yaml
-📈 INFORMATIONS GÉNÉRALES
-
-👥 Membres protégés      : ${message.guild.memberCount}
-✅ Whitelist utilisateurs : ${config.whitelistusers.length}
-🎭 Whitelist rôles        : ${config.whitelistroles.length}
-
-⚙️ CONFIGURATION ACTIVE
-
-🔨 Sanction par défaut   : ${config.punishment.toUpperCase()}
-👥 Seuil anti-raid       : ${config.raidthreshold} membres / 10s
-💬 Seuil anti-spam       : ${config.spamthreshold} messages / 5s
-🔔 Limite mentions       : ${config.antimentionslimit} mentions
-\`\`\`
-            `)
-            .setFooter({ text: '🛡️ Protection active 24/7' })
-            .setTimestamp();
+        const content = `\`\`\`ansi
+[1;36m╔════════════════════════════════════════════╗[0m
+[1;36m║         [1;33m📊 STATISTIQUES [1;36m                  ║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32m📈 INFORMATIONS[0m                           [1;36m║[0m
+[1;36m║ [0m   👥 Membres      : [1;33m${message.guild.memberCount}[0m                 [1;36m║[0m
+[1;36m║ [0m   ✅ Whitelist    : [1;33m${config.whitelistusers.length}[0m users          [1;36m║[0m
+[1;36m║ [0m   🎭 Whitelist    : [1;33m${config.whitelistroles.length}[0m roles          [1;36m║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32m⚙️ CONFIGURATION[0m                           [1;36m║[0m
+[1;36m║ [0m   🔨 Sanction     : [1;33m${config.punishment.toUpperCase()}[0m               [1;36m║[0m
+[1;36m║ [0m   👥 Seuil Raid   : [1;33m${config.raidthreshold}[0m membres            [1;36m║[0m
+[1;36m║ [0m   💬 Seuil Spam   : [1;33m${config.spamthreshold}[0m messages          [1;36m║[0m
+[1;36m║ [0m   🔔 Mentions max : [1;33m${config.antimentionslimit}[0m                 [1;36m║[0m
+[1;36m╚════════════════════════════════════════════╝[0m
+\`\`\``;
+        const embed = createResponsiveEmbed('📊 STATISTIQUES', content);
         return message.channel.send({ embeds: [embed] });
     }
 
     // ---------- SERVERINFO ----------
     if (command === 'serverinfo') {
-        const embed = new EmbedBuilder()
-            .setColor(0x1a1a2e)
-            .setAuthor({ name: message.guild.name, iconURL: message.guild.iconURL() })
-            .setTitle('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬')
-            .setThumbnail(message.guild.iconURL())
-            .setDescription(`
-\`\`\`yaml
-ℹ️ INFORMATIONS DU SERVEUR
-
-👑 Propriétaire   : ${message.guild.members.cache.get(message.guild.ownerId)?.user?.tag || 'Inconnu'}
-👥 Membres total  : ${message.guild.memberCount}
-💬 Salons texte   : ${message.guild.channels.cache.filter(c => c.type === ChannelType.GuildText).size}
-🔊 Salons vocaux  : ${message.guild.channels.cache.filter(c => c.type === ChannelType.GuildVoice).size}
-🎭 Rôles          : ${message.guild.roles.cache.size}
-📅 Création       : <t:${Math.floor(message.guild.createdTimestamp / 1000)}:R>
-🛡️ Protection bot : ✅ ACTIVÉE
+        const content = `\`\`\`ansi
+[1;36m╔════════════════════════════════════════════╗[0m
+[1;36m║         [1;33m📡 INFOS SERVEUR [1;36m                  ║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [0m   👑 Propriétaire : [1;33m${message.guild.members.cache.get(message.guild.ownerId)?.user?.tag || 'Inconnu'}[0m  [1;36m║[0m
+[1;36m║ [0m   👥 Membres       : [1;33m${message.guild.memberCount}[0m                 [1;36m║[0m
+[1;36m║ [0m   💬 Salons texte  : [1;33m${message.guild.channels.cache.filter(c => c.type === ChannelType.GuildText).size}[0m                 [1;36m║[0m
+[1;36m║ [0m   🔊 Salons vocaux : [1;33m${message.guild.channels.cache.filter(c => c.type === ChannelType.GuildVoice).size}[0m                 [1;36m║[0m
+[1;36m║ [0m   🎭 Rôles         : [1;33m${message.guild.roles.cache.size}[0m                    [1;36m║[0m
+[1;36m║ [0m   📅 Création      : [1;33m${Math.floor((Date.now() - message.guild.createdTimestamp) / 86400000)}[0m jours          [1;36m║[0m
+[1;36m╚════════════════════════════════════════════╝[0m
 \`\`\`
-            `)
-            .setFooter({ text: `ID: ${message.guild.id}` })
-            .setTimestamp();
+> 🛡️ **Protection activée :** ✅`;
+        const embed = createResponsiveEmbed(`📡 ${message.guild.name}`, content);
+        embed.setThumbnail(message.guild.iconURL());
         return message.channel.send({ embeds: [embed] });
     }
 
     // ---------- BOSS ----------
     if (command === 'boss') {
-        const embed = new EmbedBuilder()
-            .setColor(0x1a1a2e)
-            .setAuthor({ name: '👑 MADE BY VCTR_ON', iconURL: client.user.displayAvatarURL() })
-            .setTitle('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬')
-            .setDescription(`
-\`\`\`yaml
-⭐ BOT DE SÉCURITÉ ULTIME
-
-✨ Créé par vctr_on
-🚀 Version 10.0 - Ultimate Edition
-🛡️ Anti-Nuke & Anti-Raid intégrés
-💜 Protection 24/7 - Toujours actif
-
-📌 Commandes : ${PREFIX}help
-🌐 Dashboard : ${PREFIX}dashboard
+        const content = `\`\`\`ansi
+[1;36m╔════════════════════════════════════════════╗[0m
+[1;36m║         [1;33m👑 MADE BY VCTR_ON [1;36m                ║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [0m   ⭐ Créé par : [1;33mvctr_on[0m                       [1;36m║[0m
+[1;36m║ [0m   🚀 Version   : [1;33m10.0 - Ultimate[0m              [1;36m║[0m
+[1;36m║ [0m   🛡️ Type      : [1;33mAnti-Nuke & Anti-Raid[0m       [1;36m║[0m
+[1;36m║ [0m   💜 Uptime    : [1;33m24/7 - Toujours actif[0m        [1;36m║[0m
+[1;36m╠════════════════════════════════════════════╣[0m
+[1;36m║ [1;32m📌 COMMANDES[0m                                 [1;36m║[0m
+[1;36m║ [0m   [1;36m>>help[0m      - Aide complète           [1;36m║[0m
+[1;36m║ [0m   [1;36m>>dashboard[0m  - Panneau de contrôle     [1;36m║[0m
+[1;36m╚════════════════════════════════════════════╝[0m
 \`\`\`
-            `)
-            .setFooter({ text: '🛡️ Protection maximale activée' })
-            .setTimestamp();
+> 🔒 **Protection maximale activée**`;
+        const embed = createResponsiveEmbed('👑 CRÉDITS', content, 0xFF0000);
         return message.channel.send({ embeds: [embed] });
-    }
-
-    // ---------- SET THRESHOLD ----------
-    if (command === 'set' && args[0] === 'threshold' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        const value = parseInt(args[1]);
-        if (isNaN(value) || value < 2 || value > 20) return message.reply('❌ Seuil entre **2** et **20** arrivées');
-        config.raidthreshold = value;
-        configs.set(message.guild.id, config);
-        message.reply(`✅ Seuil anti-raid défini sur **${value}** arrivées en 10 secondes`);
     }
 
     // ---------- SETUPVERIFY ----------
@@ -423,8 +408,8 @@ client.on('messageCreate', async (message) => {
         config.verification = true;
         configs.set(message.guild.id, config);
         const embed = new EmbedBuilder()
-            .setColor(0x1a1a2e)
-            .setAuthor({ name: '✅ VÉRIFICATION ACTIVÉE', iconURL: client.user.displayAvatarURL() })
+            .setColor(0x00FF00)
+            .setTitle('✅ VÉRIFICATION ACTIVÉE')
             .setDescription(`Les nouveaux membres devront taper \`${PREFIX}verify\` pour accéder au serveur`)
             .setTimestamp();
         return message.channel.send({ embeds: [embed] });
@@ -436,12 +421,20 @@ client.on('messageCreate', async (message) => {
         if (verificationCache.has(message.author.id)) return message.reply('❌ Tu es déjà vérifié !');
         verificationCache.set(message.author.id, true);
         const embed = new EmbedBuilder()
-            .setColor(0x1a1a2e)
-            .setAuthor({ name: '✅ VÉRIFICATION RÉUSSIE', iconURL: client.user.displayAvatarURL() })
+            .setColor(0x00FF00)
+            .setTitle('✅ VÉRIFICATION RÉUSSIE')
             .setDescription('Bienvenue sur le serveur ! 🎉')
-            .setFooter({ text: '🛡️ Bot de sécurité' })
             .setTimestamp();
         return message.reply({ embeds: [embed] });
+    }
+
+    // ---------- SET THRESHOLD ----------
+    if (command === 'set' && args[0] === 'threshold' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        const value = parseInt(args[1]);
+        if (isNaN(value) || value < 2 || value > 20) return message.reply('❌ Seuil entre **2** et **20** arrivées');
+        config.raidthreshold = value;
+        configs.set(message.guild.id, config);
+        message.reply(`✅ Seuil anti-raid défini sur **${value}** arrivées en 10 secondes`);
     }
 
     // ---------- LOGCHANNEL ----------
@@ -466,7 +459,7 @@ client.on('messageCreate', async (message) => {
             const roles = config.whitelistroles.map(id => `<@&${id}>`).join(', ') || 'Aucun';
             const embed = new EmbedBuilder()
                 .setColor(0x1a1a2e)
-                .setAuthor({ name: '✅ LISTE WHITELIST', iconURL: client.user.displayAvatarURL() })
+                .setTitle('✅ LISTE WHITELIST')
                 .addFields(
                     { name: '👤 Utilisateurs', value: users, inline: false },
                     { name: '🎭 Rôles', value: roles, inline: false }
@@ -501,7 +494,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// ========== SERVEUR WEB KEEP-ALIVE ==========
+// ========== SERVEUR WEB ==========
 const app = express();
 const port = process.env.PORT || 3000;
 
