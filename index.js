@@ -20,114 +20,273 @@ let configs = new Collection();
 let joinLog = new Collection();
 let messageCache = new Collection();
 let verificationCache = new Collection();
-let dashboardMessages = new Collection();
 
 // Configuration par défaut
 const defaultConfig = {
     antiraid: true, antispam: true, antiban: true, antikick: true,
-    antichanneldelete: true, antiroledelete: true,
-    antimentions: true, antiserverrename: true, antiservericon: true,
-    antimentionslimit: 5, raidthreshold: 5, spamthreshold: 5,
-    punishment: 'kick', logchannel: null, verification: false,
-    whitelistusers: [], whitelistroles: []
+    antichanneldelete: true, antiroledelete: true, antimentions: true,
+    antiserverrename: true, antiservericon: true, antimentionslimit: 5,
+    raidthreshold: 5, spamthreshold: 5, punishment: 'kick',
+    logchannel: null, verification: false, whitelistusers: [], whitelistroles: []
 };
 
 // ========== BOT PRÊT ==========
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} est en ligne !`);
-    console.log(`🛡️ ${client.guilds.cache.size} serveurs protégés`);
-    client.user.setActivity(`🛡️ ${PREFIX}help`, { type: ActivityType.Watching });
+    client.user.setActivity(`${PREFIX}help`, { type: ActivityType.Watching });
 });
 
-// ========== FONCTION POUR EMBEDS RESPONSIVE ==========
-function createResponsiveEmbed(title, content, color = 0x1a1a2e, thumbnail = null) {
-    const embed = new EmbedBuilder()
-        .setColor(color)
-        .setTitle(title)
-        .setDescription(content)
-        .setFooter({ text: '🛡️ Vctr_on Security • 24/7' })
-        .setTimestamp();
-    
-    if (thumbnail) embed.setThumbnail(thumbnail);
-    return embed;
-}
+// ========== COMMANDES ==========
+client.on('messageCreate', async (message) => {
+    if (message.author.bot || !message.content.startsWith(PREFIX)) return;
+    if (!message.guild) return;
 
-// ========== DASHBOARD ==========
-async function updateDashboard(message, config, guild) {
-    const statusIcon = (value) => value ? '✅' : '❌';
-    
-    const content = `\`\`\`ansi
-[1;36m╔════════════════════════════════════════════╗[0m
-[1;36m║         [1;33m🛡️ DASHBOARD DE SÉCURITÉ [1;36m           ║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32mPROTECTIONS ACTIVES[0m                         [1;36m║[0m
-[1;36m║ [0m   Anti-Raid     : ${statusIcon(config.antiraid)} [1;36m║[0m
-[1;36m║ [0m   Anti-Spam     : ${statusIcon(config.antispam)} [1;36m║[0m
-[1;36m║ [0m   Anti-Ban      : ${statusIcon(config.antiban)} [1;36m║[0m
-[1;36m║ [0m   Anti-Kick     : ${statusIcon(config.antikick)} [1;36m║[0m
-[1;36m║ [0m   Anti-Mentions : ${statusIcon(config.antimentions)} [1;36m║[0m
-[1;36m║ [0m   Anti-Channels : ${statusIcon(config.antichanneldelete)} [1;36m║[0m
-[1;36m║ [0m   Anti-Roles    : ${statusIcon(config.antiroledelete)} [1;36m║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32mCONFIGURATION[0m                                 [1;36m║[0m
-[1;36m║ [0m   Sanction   : [1;33m${config.punishment.toUpperCase()}[0m                [1;36m║[0m
-[1;36m║ [0m   Seuil Raid : [1;33m${config.raidthreshold}[0m membres/10s         [1;36m║[0m
-[1;36m║ [0m   Seuil Spam : [1;33m${config.spamthreshold}[0m messages/5s         [1;36m║[0m
-[1;36m║ [0m   Mentions   : [1;33m${config.antimentionslimit}[0m max              [1;36m║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32mINFORMATIONS[0m                                 [1;36m║[0m
-[1;36m║ [0m   👥 Membres     : [1;33m${guild.memberCount}[0m                     [1;36m║[0m
-[1;36m║ [0m   ✅ Whitelist   : [1;33m${config.whitelistusers.length}[0m users           [1;36m║[0m
-[1;36m║ [0m   🎭 Whitelist   : [1;33m${config.whitelistroles.length}[0m roles           [1;36m║[0m
-[1;36m╚════════════════════════════════════════════╝[0m
-\`\`\`
-> **📌 Préfixe :** ` + PREFIX + ` | **🛡️ Bot v10.0**
-> 💡 Utilisez les boutons ci-dessous pour configurer`;
+    const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+    const command = args.shift().toLowerCase();
 
-    const embed = new EmbedBuilder()
-        .setColor(0x1a1a2e)
-        .setTitle('• SECURITY DASHBOARD •')
-        .setDescription(content)
-        .setFooter({ text: `Serveur : ${guild.name} | Cliquez sur les boutons` })
-        .setTimestamp();
+    if (!configs.has(message.guild.id)) configs.set(message.guild.id, { ...defaultConfig });
+    const config = configs.get(message.guild.id);
 
-    const row1 = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder().setCustomId('toggle_antiraid').setLabel('Anti-Raid').setStyle(config.antiraid ? ButtonStyle.Success : ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('toggle_antispam').setLabel('Anti-Spam').setStyle(config.antispam ? ButtonStyle.Success : ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('toggle_antiban').setLabel('Anti-Ban').setStyle(config.antiban ? ButtonStyle.Success : ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('toggle_antikick').setLabel('Anti-Kick').setStyle(config.antikick ? ButtonStyle.Success : ButtonStyle.Danger)
-        );
+    // ---------- HELP ----------
+    if (command === 'help') {
+        const embed = new EmbedBuilder()
+            .setColor(0x1a1a2e)
+            .setAuthor({ name: '🛡️ SECURITY BOT', iconURL: client.user.displayAvatarURL() })
+            .setDescription(`
+**📌 COMMANDES DISPONIBLES**
 
-    const row2 = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder().setCustomId('punishment_kick').setLabel('⚡ Kick').setStyle(config.punishment === 'kick' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('punishment_ban').setLabel('⛔ Ban').setStyle(config.punishment === 'ban' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('punishment_timeout').setLabel('⏱️ Timeout').setStyle(config.punishment === 'timeout' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('refresh_dashboard').setLabel('🔄 Refresh').setStyle(ButtonStyle.Secondary)
-        );
+**🚀 DASHBOARD**
+\`>>dashboard\` - Ouvrir le panneau de contrôle
+\`>>stats\` - Voir les statistiques
+\`>>serverinfo\` - Infos du serveur
 
-    const row3 = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder().setCustomId('btn_logs').setLabel('📁 Logs').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('btn_whitelist').setLabel('✅ Whitelist').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('btn_verify').setLabel('🔐 Verify').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('btn_help').setLabel('❓ Help').setStyle(ButtonStyle.Secondary)
-        );
+**⚙️ CONFIGURATION**
+\`>>set threshold <nombre>\` - Changer seuil anti-raid
+\`>>logchannel #salon\` - Salon des logs
+\`>>whitelist user/@user\` - Gérer whitelist
+\`>>setupverify\` - Activer vérification
 
-    if (dashboardMessages.has(guild.id)) {
-        try {
-            const oldMsg = await message.channel.messages.fetch(dashboardMessages.get(guild.id));
-            if (oldMsg) await oldMsg.edit({ embeds: [embed], components: [row1, row2, row3] });
-        } catch(e) {
-            const msg = await message.channel.send({ embeds: [embed], components: [row1, row2, row3] });
-            dashboardMessages.set(guild.id, msg.id);
-        }
-    } else {
-        const msg = await message.channel.send({ embeds: [embed], components: [row1, row2, row3] });
-        dashboardMessages.set(guild.id, msg.id);
+**👑 AUTRES**
+\`>>boss\` - Crédits
+\`>>verify\` - Se vérifier
+\`>>help\` - Cette aide
+            `)
+            .setFooter({ text: '🛡️ Protection 24/7 • vctr_on' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
     }
-}
+
+    // ---------- DASHBOARD ----------
+    if (command === 'dashboard') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return message.reply('❌ Administrateur requis');
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x1a1a2e)
+            .setAuthor({ name: '🛡️ DASHBOARD', iconURL: message.guild.iconURL() })
+            .setDescription(`
+**📊 STATISTIQUES**
+
+👥 Membres : **${message.guild.memberCount}**
+✅ Whitelist : **${config.whitelistusers.length}** utilisateurs
+🎭 Whitelist : **${config.whitelistroles.length}** rôles
+
+**⚙️ CONFIGURATION**
+
+🔨 Sanction : **${config.punishment.toUpperCase()}**
+👥 Seuil Raid : **${config.raidthreshold}** membres/10s
+💬 Seuil Spam : **${config.spamthreshold}** messages/5s
+🔔 Mentions max : **${config.antimentionslimit}**
+
+**🛡️ PROTECTIONS**
+
+${config.antiraid ? '✅' : '❌'} Anti-Raid    ${config.antispam ? '✅' : '❌'} Anti-Spam
+${config.antiban ? '✅' : '❌'} Anti-Ban     ${config.antikick ? '✅' : '❌'} Anti-Kick
+${config.antimentions ? '✅' : '❌'} Anti-Mentions
+${config.antichanneldelete ? '✅' : '❌'} Anti-Channel
+${config.antiroledelete ? '✅' : '❌'} Anti-Role
+            `)
+            .setFooter({ text: `Cliquez sur les boutons • ${message.guild.name}` })
+            .setTimestamp();
+
+        const row1 = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder().setCustomId('toggle_antiraid').setLabel('Anti-Raid').setStyle(config.antiraid ? ButtonStyle.Success : ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('toggle_antispam').setLabel('Anti-Spam').setStyle(config.antispam ? ButtonStyle.Success : ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('toggle_antiban').setLabel('Anti-Ban').setStyle(config.antiban ? ButtonStyle.Success : ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('toggle_antikick').setLabel('Anti-Kick').setStyle(config.antikick ? ButtonStyle.Success : ButtonStyle.Danger)
+            );
+
+        const row2 = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder().setCustomId('punishment_kick').setLabel('Kick').setStyle(config.punishment === 'kick' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('punishment_ban').setLabel('Ban').setStyle(config.punishment === 'ban' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('punishment_timeout').setLabel('Timeout').setStyle(config.punishment === 'timeout' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('refresh_dashboard').setLabel('Refresh').setStyle(ButtonStyle.Secondary)
+            );
+
+        const row3 = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder().setCustomId('btn_logs').setLabel('Logs').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('btn_whitelist').setLabel('Whitelist').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('btn_verify').setLabel('Verify').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('btn_help').setLabel('Help').setStyle(ButtonStyle.Secondary)
+            );
+
+        await message.channel.send({ embeds: [embed], components: [row1, row2, row3] });
+    }
+
+    // ---------- STATS ----------
+    if (command === 'stats') {
+        const embed = new EmbedBuilder()
+            .setColor(0x1a1a2e)
+            .setAuthor({ name: '📊 STATISTIQUES', iconURL: message.guild.iconURL() })
+            .setDescription(`
+**INFORMATIONS**
+
+👥 Membres : **${message.guild.memberCount}**
+✅ Whitelist users : **${config.whitelistusers.length}**
+🎭 Whitelist roles : **${config.whitelistroles.length}**
+
+**CONFIGURATION**
+
+🔨 Sanction : **${config.punishment.toUpperCase()}**
+👥 Seuil Raid : **${config.raidthreshold}** membres/10s
+💬 Seuil Spam : **${config.spamthreshold}** messages/5s
+🔔 Mentions max : **${config.antimentionslimit}**
+            `)
+            .setFooter({ text: '🛡️ Protection 24/7' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // ---------- SERVERINFO ----------
+    if (command === 'serverinfo') {
+        const embed = new EmbedBuilder()
+            .setColor(0x1a1a2e)
+            .setAuthor({ name: message.guild.name, iconURL: message.guild.iconURL() })
+            .setThumbnail(message.guild.iconURL())
+            .setDescription(`
+👑 Propriétaire : <@${message.guild.ownerId}>
+👥 Membres : **${message.guild.memberCount}**
+💬 Salons : **${message.guild.channels.cache.size}**
+📅 Création : <t:${Math.floor(message.guild.createdTimestamp / 1000)}:R>
+🛡️ Protection : **Activée**
+            `)
+            .setFooter({ text: `ID: ${message.guild.id}` })
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // ---------- BOSS ----------
+    if (command === 'boss') {
+        const embed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setAuthor({ name: '👑 MADE BY VCTR_ON', iconURL: client.user.displayAvatarURL() })
+            .setDescription(`
+**BOT DE SÉCURITÉ ULTIME**
+
+⭐ Créé par **vctr_on**
+🚀 Version **10.0** - Ultimate
+🛡️ **Anti-Nuke & Anti-Raid**
+💜 **24/7** - Toujours actif
+
+📌 **${PREFIX}help** pour les commandes
+            `)
+            .setFooter({ text: '🛡️ Protection maximale' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // ---------- SETUPVERIFY ----------
+    if (command === 'setupverify' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        config.verification = true;
+        configs.set(message.guild.id, config);
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setDescription(`✅ **Vérification activée**\n\nLes nouveaux membres devront taper \`${PREFIX}verify\``)
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // ---------- VERIFY ----------
+    if (command === 'verify') {
+        if (!config.verification) return message.reply('❌ Vérification non activée');
+        if (verificationCache.has(message.author.id)) return message.reply('❌ Déjà vérifié');
+        verificationCache.set(message.author.id, true);
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setDescription('✅ **Vérification réussie**\n\nBienvenue sur le serveur ! 🎉')
+            .setTimestamp();
+        return message.reply({ embeds: [embed] });
+    }
+
+    // ---------- SET THRESHOLD ----------
+    if (command === 'set' && args[0] === 'threshold' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        const value = parseInt(args[1]);
+        if (isNaN(value) || value < 2 || value > 20) return message.reply('❌ Seuil entre **2** et **20**');
+        config.raidthreshold = value;
+        configs.set(message.guild.id, config);
+        message.reply(`✅ Seuil anti-raid : **${value}** membres/10s`);
+    }
+
+    // ---------- LOGCHANNEL ----------
+    if (command === 'logchannel' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        const channel = message.mentions.channels.first();
+        if (channel) {
+            config.logchannel = channel.id;
+            message.reply(`✅ Logs → ${channel}`);
+        } else {
+            config.logchannel = null;
+            message.reply(`❌ Logs désactivés`);
+        }
+        configs.set(message.guild.id, config);
+    }
+
+    // ---------- WHITELIST ----------
+    if (command === 'whitelist' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        const type = args[0];
+        
+        if (type === 'list') {
+            const users = config.whitelistusers.map(id => `<@${id}>`).join(', ') || 'Aucun';
+            const roles = config.whitelistroles.map(id => `<@&${id}>`).join(', ') || 'Aucun';
+            const embed = new EmbedBuilder()
+                .setColor(0x1a1a2e)
+                .setTitle('✅ WHITELIST')
+                .addFields(
+                    { name: 'Utilisateurs', value: users, inline: false },
+                    { name: 'Rôles', value: roles, inline: false }
+                )
+                .setTimestamp();
+            return message.channel.send({ embeds: [embed] });
+        }
+        
+        const target = message.mentions.users.first() || message.mentions.roles.first();
+        if (!target) return message.reply('❌ Mentionne un utilisateur ou un rôle');
+        
+        if (type === 'user') {
+            if (config.whitelistusers.includes(target.id)) {
+                config.whitelistusers = config.whitelistusers.filter(id => id !== target.id);
+                message.reply(`✅ ${target.tag} retiré`);
+            } else {
+                config.whitelistusers.push(target.id);
+                message.reply(`✅ ${target.tag} ajouté`);
+            }
+        } else if (type === 'role') {
+            if (config.whitelistroles.includes(target.id)) {
+                config.whitelistroles = config.whitelistroles.filter(id => id !== target.id);
+                message.reply(`✅ ${target.name} retiré`);
+            } else {
+                config.whitelistroles.push(target.id);
+                message.reply(`✅ ${target.name} ajouté`);
+            }
+        } else {
+            message.reply(`❌ Usage: \`${PREFIX}whitelist user/@user\` ou \`${PREFIX}whitelist role/@role\``);
+        }
+        configs.set(message.guild.id, config);
+    }
+});
 
 // ========== INTERACTIONS BOUTONS ==========
 client.on('interactionCreate', async (interaction) => {
@@ -148,41 +307,36 @@ client.on('interactionCreate', async (interaction) => {
         const key = toggleMap[interaction.customId];
         config[key] = !config[key];
         configs.set(interaction.guild.id, config);
-        await interaction.reply({ content: `✅ \`${key}\` ${config[key] ? 'activé' : 'désactivé'}`, ephemeral: true });
-        await updateDashboard(interaction.message, config, interaction.guild);
+        await interaction.reply({ content: `✅ ${key} ${config[key] ? 'activé' : 'désactivé'}`, ephemeral: true });
         return;
     }
 
     if (interaction.customId === 'punishment_kick') {
         config.punishment = 'kick';
         configs.set(interaction.guild.id, config);
-        await interaction.reply({ content: '✅ Sanction définie sur **Kick**', ephemeral: true });
-        await updateDashboard(interaction.message, config, interaction.guild);
+        await interaction.reply({ content: '✅ Sanction : **Kick**', ephemeral: true });
     } else if (interaction.customId === 'punishment_ban') {
         config.punishment = 'ban';
         configs.set(interaction.guild.id, config);
-        await interaction.reply({ content: '✅ Sanction définie sur **Ban**', ephemeral: true });
-        await updateDashboard(interaction.message, config, interaction.guild);
+        await interaction.reply({ content: '✅ Sanction : **Ban**', ephemeral: true });
     } else if (interaction.customId === 'punishment_timeout') {
         config.punishment = 'timeout';
         configs.set(interaction.guild.id, config);
-        await interaction.reply({ content: '✅ Sanction définie sur **Timeout**', ephemeral: true });
-        await updateDashboard(interaction.message, config, interaction.guild);
+        await interaction.reply({ content: '✅ Sanction : **Timeout**', ephemeral: true });
     } else if (interaction.customId === 'refresh_dashboard') {
-        await interaction.reply({ content: '🔄 Dashboard rafraîchi', ephemeral: true });
-        await updateDashboard(interaction.message, config, interaction.guild);
+        await interaction.reply({ content: '🔄 Rafraîchi', ephemeral: true });
     } else if (interaction.customId === 'btn_logs') {
-        await interaction.reply({ content: '📁 **Configuration des logs**\n\nUtilisez : `>>logchannel #salon`', ephemeral: true });
+        await interaction.reply({ content: '📁 Utilisez `>>logchannel #salon`', ephemeral: true });
     } else if (interaction.customId === 'btn_whitelist') {
-        await interaction.reply({ content: '✅ **Gestion Whitelist**\n\n`>>whitelist user @user` - Ajouter\n`>>whitelist role @role` - Ajouter rôle\n`>>whitelist list` - Voir la liste', ephemeral: true });
+        await interaction.reply({ content: '✅ `>>whitelist user/@user`\n📋 `>>whitelist list`', ephemeral: true });
     } else if (interaction.customId === 'btn_verify') {
-        await interaction.reply({ content: '🔐 **Vérification**\n\n`>>setupverify` - Activer\n`>>verify` - Se vérifier', ephemeral: true });
+        await interaction.reply({ content: '🔐 `>>setupverify` - Activer\n✅ `>>verify` - Se vérifier', ephemeral: true });
     } else if (interaction.customId === 'btn_help') {
-        await interaction.reply({ content: '📌 **Commandes disponibles**\n\n`>>dashboard` - Panneau principal\n`>>help` - Aide complète\n`>>stats` - Statistiques\n`>>serverinfo` - Infos serveur\n`>>boss` - Crédits', ephemeral: true });
+        await interaction.reply({ content: '📌 `>>help` - Toutes les commandes', ephemeral: true });
     }
 });
 
-// ========== FONCTIONS DE SÉCURITÉ ==========
+// ========== ÉVÈNEMENTS SÉCURITÉ ==========
 async function punish(guildId, userId, reason) {
     const config = configs.get(guildId) || defaultConfig;
     const guild = client.guilds.cache.get(guildId);
@@ -198,7 +352,6 @@ async function punish(guildId, userId, reason) {
     } catch(e) { return null; }
 }
 
-// ========== ÉVÈNEMENTS SÉCURITÉ ==========
 client.on('guildMemberAdd', async (member) => {
     const config = configs.get(member.guild.id) || defaultConfig;
     if (!config.antiraid) return;
@@ -284,221 +437,11 @@ client.on('roleDelete', async (role) => {
     if (log && log.executor.id !== client.user.id) await punish(role.guild.id, log.executor.id, 'Suppression rôle');
 });
 
-// ========== COMMANDES ==========
-client.on('messageCreate', async (message) => {
-    if (message.author.bot || !message.content.startsWith(PREFIX)) return;
-    if (!message.guild) return;
-
-    const args = message.content.slice(PREFIX.length).trim().split(/ +/);
-    const command = args.shift().toLowerCase();
-
-    if (!configs.has(message.guild.id)) configs.set(message.guild.id, { ...defaultConfig });
-    const config = configs.get(message.guild.id);
-
-    // ---------- DASHBOARD ----------
-    if (command === 'dashboard' || command === 'panel') {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return message.reply('❌ Tu dois être **administrateur** pour accéder au dashboard.');
-        }
-        await updateDashboard(message, config, message.guild);
-        return;
-    }
-
-    // ---------- HELP ----------
-    if (command === 'help') {
-        const content = `\`\`\`ansi
-[1;36m╔════════════════════════════════════════════╗[0m
-[1;36m║         [1;33m📋 CENTRE DE COMMANDES [1;36m             ║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32m🚀 DASHBOARD[0m                                [1;36m║[0m
-[1;36m║ [0m   [1;36m>>dashboard[0m  - Panneau de contrôle     [1;36m║[0m
-[1;36m║ [0m   [1;36m>>stats[0m      - Statistiques           [1;36m║[0m
-[1;36m║ [0m   [1;36m>>serverinfo[0m - Infos du serveur       [1;36m║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32m⚙️ CONFIGURATION[0m                           [1;36m║[0m
-[1;36m║ [0m   [1;36m>>set threshold [n][0m - Seuil anti-raid [1;36m║[0m
-[1;36m║ [0m   [1;36m>>logchannel #salon[0m - Salon des logs [1;36m║[0m
-[1;36m║ [0m   [1;36m>>whitelist[0m      - Gérer whitelist   [1;36m║[0m
-[1;36m║ [0m   [1;36m>>setupverify[0m   - Vérification       [1;36m║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32m👑 AUTRES[0m                                  [1;36m║[0m
-[1;36m║ [0m   [1;36m>>boss[0m       - Crédits du bot        [1;36m║[0m
-[1;36m║ [0m   [1;36m>>verify[0m     - Se vérifier          [1;36m║[0m
-[1;36m║ [0m   [1;36m>>help[0m       - Cette aide          [1;36m║[0m
-[1;36m╚════════════════════════════════════════════╝[0m
-\`\`\`
-> **📌 Préfixe :** ` + PREFIX + ` | **🛡️ Protection 24/7**
-> 💡 Utilisez \`>>dashboard\` pour le panneau interactif`;
-
-        const embed = new EmbedBuilder()
-            .setColor(0x1a1a2e)
-            .setTitle('• SECURITY BOT •')
-            .setDescription(content)
-            .setFooter({ text: '🛡️ Créé par vctr_on • Version 10.0' })
-            .setTimestamp();
-        
-        return message.channel.send({ embeds: [embed] });
-    }
-
-    // ---------- STATS ----------
-    if (command === 'stats') {
-        const content = `\`\`\`ansi
-[1;36m╔════════════════════════════════════════════╗[0m
-[1;36m║         [1;33m📊 STATISTIQUES [1;36m                  ║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32m📈 INFORMATIONS[0m                           [1;36m║[0m
-[1;36m║ [0m   👥 Membres      : [1;33m${message.guild.memberCount}[0m                 [1;36m║[0m
-[1;36m║ [0m   ✅ Whitelist    : [1;33m${config.whitelistusers.length}[0m users          [1;36m║[0m
-[1;36m║ [0m   🎭 Whitelist    : [1;33m${config.whitelistroles.length}[0m roles          [1;36m║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32m⚙️ CONFIGURATION[0m                           [1;36m║[0m
-[1;36m║ [0m   🔨 Sanction     : [1;33m${config.punishment.toUpperCase()}[0m               [1;36m║[0m
-[1;36m║ [0m   👥 Seuil Raid   : [1;33m${config.raidthreshold}[0m membres            [1;36m║[0m
-[1;36m║ [0m   💬 Seuil Spam   : [1;33m${config.spamthreshold}[0m messages          [1;36m║[0m
-[1;36m║ [0m   🔔 Mentions max : [1;33m${config.antimentionslimit}[0m                 [1;36m║[0m
-[1;36m╚════════════════════════════════════════════╝[0m
-\`\`\``;
-        const embed = createResponsiveEmbed('📊 STATISTIQUES', content);
-        return message.channel.send({ embeds: [embed] });
-    }
-
-    // ---------- SERVERINFO ----------
-    if (command === 'serverinfo') {
-        const content = `\`\`\`ansi
-[1;36m╔════════════════════════════════════════════╗[0m
-[1;36m║         [1;33m📡 INFOS SERVEUR [1;36m                  ║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [0m   👑 Propriétaire : [1;33m${message.guild.members.cache.get(message.guild.ownerId)?.user?.tag || 'Inconnu'}[0m  [1;36m║[0m
-[1;36m║ [0m   👥 Membres       : [1;33m${message.guild.memberCount}[0m                 [1;36m║[0m
-[1;36m║ [0m   💬 Salons texte  : [1;33m${message.guild.channels.cache.filter(c => c.type === ChannelType.GuildText).size}[0m                 [1;36m║[0m
-[1;36m║ [0m   🔊 Salons vocaux : [1;33m${message.guild.channels.cache.filter(c => c.type === ChannelType.GuildVoice).size}[0m                 [1;36m║[0m
-[1;36m║ [0m   🎭 Rôles         : [1;33m${message.guild.roles.cache.size}[0m                    [1;36m║[0m
-[1;36m║ [0m   📅 Création      : [1;33m${Math.floor((Date.now() - message.guild.createdTimestamp) / 86400000)}[0m jours          [1;36m║[0m
-[1;36m╚════════════════════════════════════════════╝[0m
-\`\`\`
-> 🛡️ **Protection activée :** ✅`;
-        const embed = createResponsiveEmbed(`📡 ${message.guild.name}`, content);
-        embed.setThumbnail(message.guild.iconURL());
-        return message.channel.send({ embeds: [embed] });
-    }
-
-    // ---------- BOSS ----------
-    if (command === 'boss') {
-        const content = `\`\`\`ansi
-[1;36m╔════════════════════════════════════════════╗[0m
-[1;36m║         [1;33m👑 MADE BY VCTR_ON [1;36m                ║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [0m   ⭐ Créé par : [1;33mvctr_on[0m                       [1;36m║[0m
-[1;36m║ [0m   🚀 Version   : [1;33m10.0 - Ultimate[0m              [1;36m║[0m
-[1;36m║ [0m   🛡️ Type      : [1;33mAnti-Nuke & Anti-Raid[0m       [1;36m║[0m
-[1;36m║ [0m   💜 Uptime    : [1;33m24/7 - Toujours actif[0m        [1;36m║[0m
-[1;36m╠════════════════════════════════════════════╣[0m
-[1;36m║ [1;32m📌 COMMANDES[0m                                 [1;36m║[0m
-[1;36m║ [0m   [1;36m>>help[0m      - Aide complète           [1;36m║[0m
-[1;36m║ [0m   [1;36m>>dashboard[0m  - Panneau de contrôle     [1;36m║[0m
-[1;36m╚════════════════════════════════════════════╝[0m
-\`\`\`
-> 🔒 **Protection maximale activée**`;
-        const embed = createResponsiveEmbed('👑 CRÉDITS', content, 0xFF0000);
-        return message.channel.send({ embeds: [embed] });
-    }
-
-    // ---------- SETUPVERIFY ----------
-    if (command === 'setupverify' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        config.verification = true;
-        configs.set(message.guild.id, config);
-        const embed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('✅ VÉRIFICATION ACTIVÉE')
-            .setDescription(`Les nouveaux membres devront taper \`${PREFIX}verify\` pour accéder au serveur`)
-            .setTimestamp();
-        return message.channel.send({ embeds: [embed] });
-    }
-
-    // ---------- VERIFY ----------
-    if (command === 'verify') {
-        if (!config.verification) return message.reply('❌ La vérification n\'est pas activée. Un admin doit taper `>>setupverify`');
-        if (verificationCache.has(message.author.id)) return message.reply('❌ Tu es déjà vérifié !');
-        verificationCache.set(message.author.id, true);
-        const embed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('✅ VÉRIFICATION RÉUSSIE')
-            .setDescription('Bienvenue sur le serveur ! 🎉')
-            .setTimestamp();
-        return message.reply({ embeds: [embed] });
-    }
-
-    // ---------- SET THRESHOLD ----------
-    if (command === 'set' && args[0] === 'threshold' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        const value = parseInt(args[1]);
-        if (isNaN(value) || value < 2 || value > 20) return message.reply('❌ Seuil entre **2** et **20** arrivées');
-        config.raidthreshold = value;
-        configs.set(message.guild.id, config);
-        message.reply(`✅ Seuil anti-raid défini sur **${value}** arrivées en 10 secondes`);
-    }
-
-    // ---------- LOGCHANNEL ----------
-    if (command === 'logchannel' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        const channel = message.mentions.channels.first();
-        if (channel) {
-            config.logchannel = channel.id;
-            message.reply(`✅ Logs configurés dans ${channel}`);
-        } else {
-            config.logchannel = null;
-            message.reply(`❌ Salon des logs désactivé`);
-        }
-        configs.set(message.guild.id, config);
-    }
-
-    // ---------- WHITELIST ----------
-    if (command === 'whitelist' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        const type = args[0];
-        
-        if (type === 'list') {
-            const users = config.whitelistusers.map(id => `<@${id}>`).join(', ') || 'Aucun';
-            const roles = config.whitelistroles.map(id => `<@&${id}>`).join(', ') || 'Aucun';
-            const embed = new EmbedBuilder()
-                .setColor(0x1a1a2e)
-                .setTitle('✅ LISTE WHITELIST')
-                .addFields(
-                    { name: '👤 Utilisateurs', value: users, inline: false },
-                    { name: '🎭 Rôles', value: roles, inline: false }
-                )
-                .setTimestamp();
-            return message.channel.send({ embeds: [embed] });
-        }
-        
-        const target = message.mentions.users.first() || message.mentions.roles.first();
-        if (!target) return message.reply('❌ Mentionne un utilisateur ou un rôle');
-        
-        if (type === 'user') {
-            if (config.whitelistusers.includes(target.id)) {
-                config.whitelistusers = config.whitelistusers.filter(id => id !== target.id);
-                message.reply(`✅ ${target.tag} retiré de la whitelist`);
-            } else {
-                config.whitelistusers.push(target.id);
-                message.reply(`✅ ${target.tag} ajouté à la whitelist`);
-            }
-        } else if (type === 'role') {
-            if (config.whitelistroles.includes(target.id)) {
-                config.whitelistroles = config.whitelistroles.filter(id => id !== target.id);
-                message.reply(`✅ ${target.name} retiré de la whitelist`);
-            } else {
-                config.whitelistroles.push(target.id);
-                message.reply(`✅ ${target.name} ajouté à la whitelist`);
-            }
-        } else {
-            message.reply(`❌ Usage: \`${PREFIX}whitelist user/@user\` ou \`${PREFIX}whitelist role/@role\`\n\`${PREFIX}whitelist list\` pour voir la liste`);
-        }
-        configs.set(message.guild.id, config);
-    }
-});
-
 // ========== SERVEUR WEB ==========
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.send('🛡️ Bot de sécurité en ligne !'));
-app.listen(port, () => console.log(`✅ Keep-alive sur port ${port}`));
+app.get('/', (req, res) => res.send('🛡️ Bot en ligne'));
+app.listen(port, () => console.log(`✅ Web server port ${port}`));
 
 client.login(TOKEN);
